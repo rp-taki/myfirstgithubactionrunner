@@ -56,6 +56,8 @@ jobs:
   push:
     runs-on: arc-runner-set
     needs: scan
+    outputs:
+      image_digest: ${{ steps.push_step.outputs.digest }}
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -65,7 +67,6 @@ jobs:
       - name: Load image
         run: docker load -i image.tar
 
-      # --- 追加: Harborへのログイン ---
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
@@ -74,4 +75,35 @@ jobs:
           password: ${{ secrets.HARBOR_PASSWORD }}
 
       - name: Push image
-        run: docker push ${{ env.IMAGE }}
+        id: push_step
+        run: |
+          docker push ${{ env.IMAGE }}
+          # 署名に使用するため、プッシュ後のダイジェスト値を抽出
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE }} | cut -d'@' -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+  sign:
+    runs-on: arc-runner-set
+    needs: push
+    permissions:
+      id-token: write   # Keyless署名（OIDC認証）に必須
+      contents: read    # リポジトリ読み取り権限
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.8.0
+
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
+      - name: Sign the image (Keyless)
+        env:
+          # pushジョブから渡されたDigestを使用
+          IMAGE_WITH_DIGEST: "${{ env.IMAGE }}@${{ needs.push.outputs.image_digest }}"
+        run: |
+          # 鍵を指定せずに実行。COSIGN_PASSWORD等も不要です。
+          # 実行時に一時的な証明書が発行され、署名が行われます。
+          cosign sign --yes ${IMAGE_WITH_DIGEST}
