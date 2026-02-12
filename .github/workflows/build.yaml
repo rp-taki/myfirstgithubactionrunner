@@ -47,17 +47,20 @@ jobs:
       - name: Load image
         run: docker load -i image.tar
 
-      # Trivyのインストール (バイナリを直接取得)
+      # Trivyのインストール (curlを使用するように修正)
       - name: Install Trivy
         run: |
           VERSION=$(curl --silent "https://api.github.com/repos/aquasecurity/trivy/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Installing Trivy $VERSION"
-          wget -qO- https://github.com/aquasecurity/trivy/releases/download/${VERSION}/trivy_${VERSION#v}_Linux-64bit.tar.gz | tar xz -C /usr/local/bin trivy
+          # wget の代わりに curl -L -o を使用
+          curl -L -o trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/${VERSION}/trivy_${VERSION#v}_Linux-64bit.tar.gz
+          tar xzf trivy.tar.gz trivy
+          sudo mv trivy /usr/local/bin/
+          rm trivy.tar.gz
 
       - name: Scan image
         run: |
-          # 脆弱性が検出されてもジョブを継続させる場合は --exit-code 0 に設定
-          # 致命的な脆弱性(CRITICAL)がある場合にジョブを失敗させたい場合は --exit-code 1 を使用
+          # 脆弱性が検出されてもジョブを継続させる
           trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress ${{ env.IMAGE }}
 
       - name: Check image list
