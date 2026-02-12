@@ -47,11 +47,21 @@ jobs:
       - name: Load image
         run: docker load -i image.tar
 
+      # Trivyのインストール (バイナリを直接取得)
+      - name: Install Trivy
+        run: |
+          VERSION=$(curl --silent "https://api.github.com/repos/aquasecurity/trivy/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Installing Trivy $VERSION"
+          wget -qO- https://github.com/aquasecurity/trivy/releases/download/${VERSION}/trivy_${VERSION#v}_Linux-64bit.tar.gz | tar xz -C /usr/local/bin trivy
+
       - name: Scan image
         run: |
-          echo "Scan image here"
-          # ここで Trivy などのスキャンツールを実行するのが一般的です
-          docker images
+          # 脆弱性が検出されてもジョブを継続させる場合は --exit-code 0 に設定
+          # 致命的な脆弱性(CRITICAL)がある場合にジョブを失敗させたい場合は --exit-code 1 を使用
+          trivy image --exit-code 0 --severity HIGH,CRITICAL --no-progress ${{ env.IMAGE }}
+
+      - name: Check image list
+        run: docker images
 
   push:
     runs-on: arc-runner-set
