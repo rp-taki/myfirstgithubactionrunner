@@ -6,7 +6,8 @@ on:
       - main
 
 env:
-  IMAGE: "harbor.rp-taki.com/myfirstgithubactionrunner:latest"
+  IMAGE: "harbor.rp-taki.com/rp-taki/myfirstgithubactionrunner:latest"
+  REGISTRY: "harbor.rp-taki.com"
 
 jobs:
   build:
@@ -21,7 +22,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
+          load: true # ローカルのDocker daemonに読み込む
           tags: ${{ env.IMAGE }}
 
       - name: Save image
@@ -49,6 +50,7 @@ jobs:
       - name: Scan image
         run: |
           echo "Scan image here"
+          # ここで Trivy などのスキャンツールを実行するのが一般的です
           docker images
 
   push:
@@ -62,6 +64,14 @@ jobs:
 
       - name: Load image
         run: docker load -i image.tar
+
+      # --- 追加: Harborへのログイン ---
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
 
       - name: Push image
         run: docker push ${{ env.IMAGE }}
