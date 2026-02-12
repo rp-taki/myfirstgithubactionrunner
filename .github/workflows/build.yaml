@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  IMAGE: "192.168.0.202:5000/myfirstgithubactionrunner:latest"
+  IMAGE: "harbor.rp-taki.com/myfirstgithubactionrunner:latest"
 
 jobs:
   build:
